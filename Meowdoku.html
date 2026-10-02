@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<title>Meowdoku</title>
+		<style>
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+body {
+	color: white;
+	background-color: black;
+	overflow: hidden;
+	touch-action: none;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus {
+	outline: none;
+}
+
+#status, #status-splash, #status-progress {
+	position: absolute;
+	left: 0;
+	right: 0;
+}
+
+#status, #status-splash {
+	top: 0;
+	bottom: 0;
+}
+
+#status {
+	background-color: #f7f2ee;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	visibility: visible;
+}
+
+#status-splash {
+	max-height: 100%;
+	max-width: 100%;
+	margin: auto;
+}
+
+#status-splash.show-image--false {
+	display: none;
+}
+
+#status-splash.fullsize--true {
+	height: 100%;
+	width: 100%;
+	object-fit: contain;
+}
+
+#status-splash.use-filter--false {
+	image-rendering: pixelated;
+}
+
+#status-progress, #status-notice {
+	display: none;
+}
+
+#status-progress {
+	bottom: 10%;
+	width: 50%;
+	margin: 0 auto;
+}
+
+#status-notice {
+	background-color: #5b3943;
+	border-radius: 0.5rem;
+	border: 1px solid #9b3943;
+	color: #e0e0e0;
+	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
+	line-height: 1.3;
+	margin: 0 2rem;
+	overflow: hidden;
+	padding: 1rem;
+	text-align: center;
+	z-index: 1;
+}
+		</style>
+		<link id="-gd-engine-icon" rel="icon" type="image/png" href="https://cdn.jsdelivr.net/gh/c00lkiddtech/md-@main/index.icon.png" />
+<link rel="apple-touch-icon" href="https://cdn.jsdelivr.net/gh/c00lkiddtech/md-@main/index.apple-touch-icon.png"/>
+
+	</head>
+	<body>
+		<canvas id="canvas">
+			Your browser does not support the canvas tag.
+		</canvas>
+
+		<noscript>
+			Your browser does not support JavaScript.
+		</noscript>
+
+		<div id="status">
+			<img id="status-splash" class="show-image--true fullsize--true use-filter--true" src="https://cdn.jsdelivr.net/gh/c00lkiddtech/md-@main/index.png" onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/c00lkiddtech/md-/main/index.png'" alt="">
+			<progress id="status-progress"></progress>
+<div id="download-label" role="status" style="position:absolute;bottom:5%;color:#5b3943;font:14px Arial,sans-serif;z-index:2">Loading Meowdoku… First load downloads about 216 MB.</div>
+			<div id="status-notice"></div>
+		</div>
+
+		<script>
+(() => {
+  const roots = [
+    'https://cdn.jsdelivr.net/gh/c00lkiddtech/md-@main/',
+    'https://fastly.jsdelivr.net/gh/c00lkiddtech/md-@main/',
+    'https://gcore.jsdelivr.net/gh/c00lkiddtech/md-@main/',
+    'https://raw.githubusercontent.com/c00lkiddtech/md-/main/'
+  ];
+  const nativeFetch = window.fetch.bind(window);
+  const unavailable = new Set();
+  let completed = 0;
+  window.loadMeowFile = async (path) => {
+    let lastError;
+    for (const root of roots) {
+      if (unavailable.has(root)) continue;
+      let url;
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 90000);
+        let source;
+        try {
+          const response = await nativeFetch(root + path, {signal: controller.signal});
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          source = await response.text();
+          if (source.startsWith('version https://git-lfs.github.com/')) throw new Error('Git LFS pointer instead of game data');
+        } finally { clearTimeout(timer); }
+        url = URL.createObjectURL(new Blob([source], {type: 'text/javascript'}));
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = url;
+          script.onload = () => { script.remove(); resolve(); };
+          script.onerror = () => { script.remove(); reject(new Error('Could not execute ' + path)); };
+          document.head.appendChild(script);
+        });
+        if (path.startsWith('data/')) {
+          completed++;
+          const label = document.getElementById('download-label');
+          if (label) label.textContent = 'Loading game files: ' + Math.min(completed, 52) + ' / 52';
+        }
+        return;
+      } catch (error) {
+        lastError = error;
+        unavailable.add(root);
+        console.warn('Trying another download server for', path, error);
+      } finally { if (url) URL.revokeObjectURL(url); }
+    }
+    unavailable.clear();
+    throw new Error('Could not load ' + path + '. ' + (lastError?.message || '') + ' Reload to retry.');
+  };
+  window.showMeowFailure = (error) => {
+    console.error(error);
+    const overlay = document.getElementById('status');
+    if (overlay) overlay.style.visibility = 'visible';
+    const notice = document.getElementById('status-notice');
+    if (notice) { notice.style.display = 'block'; notice.textContent = error.message || String(error); }
+  };
+})();
+
+</script>
+<script>
+// Serves the Godot engine's fetch() / AudioWorklet.addModule() calls from data/*.js so it runs from file://
+(() => {
+  const FILES = {"index.wasm": {"chunks": 12, "size": 37406162, "type": "application/wasm"}, "index.pck": {"chunks": 40, "size": 124873836, "type": "application/octet-stream"}, "index.audio.worklet.js": {"chunks": 1, "size": 7298, "type": "text/javascript"}, "index.audio.position.worklet.js": {"chunks": 1, "size": 2973, "type": "text/javascript"}};  // name -> {chunks, size, type}
+  const parts = new Map(), done = new Map();
+  window.__chunk = (name, i, b64) => {
+    const bin = atob(b64); const b = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) b[k] = bin.charCodeAt(k);
+    parts.get(name)[i] = b;
+  };
+  // Share eight download slots across the engine, game data, and audio files.
+  const MAX_DOWNLOADS = 8;
+  let activeDownloads = 0;
+  const downloadQueue = [];
+  function pumpDownloads() {
+    while (activeDownloads < MAX_DOWNLOADS && downloadQueue.length) {
+      const { path, resolve, reject } = downloadQueue.shift();
+      activeDownloads++;
+      Promise.resolve().then(() => window.loadMeowFile(path))
+        .then(resolve, reject)
+        .finally(() => { activeDownloads--; pumpDownloads(); });
+    }
+  }
+  const script = (path) => new Promise((resolve, reject) => {
+    downloadQueue.push({ path, resolve, reject });
+    pumpDownloads();
+  });
+  const load = (name) => {
+    if (!done.has(name)) {
+      const f = FILES[name]; parts.set(name, new Array(f.chunks));
+      done.set(name, (async () => {
+        await Promise.all(Array.from({ length: f.chunks }, (_, i) =>
+          script(`data/${name}-${String(i).padStart(2, '0')}.js`)
+        ));
+        const all = new Uint8Array(f.size); let o = 0;
+        for (const b of parts.get(name)) { if (!b) throw new Error('Missing chunk of ' + name); all.set(b, o); o += b.length; }
+        if (o !== f.size) throw new Error('Incomplete download of ' + name);
+        parts.delete(name); return all;
+      })());
+    }
+    return done.get(name);
+  };
+  const nameOf = (url) => { const n = String(url).split(/[?#]/)[0].split('/').pop(); return FILES[n] ? n : null; };
+  const realFetch = window.fetch.bind(window);
+  window.fetch = (url, opts) => {
+    const n = nameOf(url instanceof Request ? url.url : String(url));
+    if (!n) return realFetch(url, opts);
+    return load(n).then((b) => {
+      // the .pck is only read once; let its bytes go after this
+      if (n.endsWith('.pck')) done.delete(n);
+      return new Response(b, { status: 200, headers: { 'Content-Type': FILES[n].type, 'Content-Length': String(b.length) } });
+    });
+  };
+  if (window.AudioWorklet) {
+    const add = AudioWorklet.prototype.addModule;
+    AudioWorklet.prototype.addModule = function (url, o) {
+      const n = nameOf(url); if (!n) return add.call(this, url, o);
+      // blob: URLs are refused for worklets on file:// pages; data: URLs work
+      return load(n).then((b) => { let t = ''; for (const c of b) t += String.fromCharCode(c); return add.call(this, 'data:text/javascript;base64,' + btoa(t), o); });
+    };
+  }
+})();
+
+
+</script>
+		<script>
+(async () => {
+await window.loadMeowFile("index.js");
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":true,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":124873836,"index.wasm":37406162},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
+const GODOT_THREADS_ENABLED = false;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const statusOverlay = document.getElementById('status');
+	const statusProgress = document.getElementById('status-progress');
+	const statusNotice = document.getElementById('status-notice');
+
+	let initializing = true;
+	let statusMode = '';
+
+	function setStatusMode(mode) {
+		if (statusMode === mode || !initializing) {
+			return;
+		}
+		if (mode === 'hidden') {
+			statusOverlay.remove();
+			initializing = false;
+			return;
+		}
+		statusOverlay.style.visibility = 'visible';
+		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
+		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
+		statusMode = mode;
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		if (err instanceof Error) {
+			setStatusNotice(err.message);
+		} else if (typeof err === 'string') {
+			setStatusNotice(err);
+		} else {
+			setStatusNotice('An unknown error occurred.');
+		}
+		setStatusMode('notice');
+		initializing = false;
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let serviceWorkerRegistrationPromise;
+			try {
+				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			// There's a chance that installing the service worker would fix the issue
+			Promise.race([
+				serviceWorkerRegistrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				// For some reason, `getRegistration()` can stall
+				new Promise((resolve) => {
+					setTimeout(() => resolve(), 2000);
+				}),
+			]).then(() => {
+				// Reload if there was no error.
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			// Display the message as usual
+			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
+			displayFailureNotice(missingMsg + missing.join('\n'));
+		}
+	} else {
+		setStatusMode('progress');
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (current > 0 && total > 0) {
+					statusProgress.value = current;
+					statusProgress.max = total;
+				} else {
+					statusProgress.removeAttribute('value');
+					statusProgress.removeAttribute('max');
+				}
+			},
+		}).then(() => {
+			setStatusMode('hidden');
+		}, displayFailureNotice);
+	}
+}());
+})().catch(window.showMeowFailure);
+		</script>
+	<div id="port-credit" style="position:fixed;left:6px;bottom:4px;z-index:9999;font:11px/1.2 system-ui,sans-serif;color:rgba(120,90,80,.7);pointer-events:none;user-select:none">Ported by c00lkiddtech</div>
+</body>
+</html>
+
